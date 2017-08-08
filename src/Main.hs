@@ -7,7 +7,7 @@
 
 module Main where
 
-import Prelude (IO, putStrLn, Either (..), (.), Num (..), ($), error)
+import Prelude (IO, putStrLn, Either (..), (.), Num (..), ($), error, show, Int, fst, snd)
 
 type Bool = Either () ()
 
@@ -155,12 +155,16 @@ isEven :: Iso' (Nat, Bool)
 isEven = trace $ do
   parCoprod id (parProd (sym foldUnfold) id)
   sym distribFactor
-  id  -- a0 should be a pair of nats
+  parProd swapCoprod id
   distribFactor
   parCoprod (parProd id not) (parProd foldUnfold id)
 
+nat2Int :: Nat -> Int
+nat2Int (Fix (Left ())) = 0
+nat2Int (Fix (Right n)) = 1 + nat2Int n
+
 
 main :: IO ()
-main = putStrLn "hello"
+main = putStrLn $ show $ snd $ to (parProd (zero >> add1) true) ((), ())
 
 
