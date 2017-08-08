@@ -21,6 +21,11 @@ data Iso a b = Iso
   , from :: b -> a
   }
 
+type Iso' a = Iso a a
+
+(|>) :: Iso a b -> Iso b c -> Iso a c
+(|>) = trans
+
 swapProd :: Iso (a, b) (b, a)
 swapProd = Iso swap' swap'
   where
@@ -70,8 +75,8 @@ sym iso = Iso (from iso) (to iso)
 trans :: Iso a b -> Iso b c -> Iso a c
 trans ab bc = Iso (to bc . to ab) (from ab . from bc)
 
-id :: a -> a
-id a = a
+id :: Iso' a
+id = Iso (\a -> a) (\a -> a)
 
 parProd :: Iso a b -> Iso c d -> Iso (a, c) (b, d)
 parProd ab cd = Iso (\(a, c) -> (to ab a, to cd c))
@@ -90,30 +95,10 @@ newtype Fix f = Fix { unfold :: f (Fix f) }
 fold :: f (Fix f) -> Fix f
 fold = Fix
 
+foldUnfold :: Iso (f (Fix f)) (Fix f)
+foldUnfold = Iso fold unfold
+
 type Nat = Fix (Either ())
-
-pattern Zero :: Nat
-pattern Zero = Fix (Left ())
-
-pattern Succ :: Nat -> Nat
-pattern Succ n = Fix (Right n)
-
-instance Num Nat where
-  fromInteger 0 = Zero
-  fromInteger n = Succ . fromInteger $ n - 1
-
-  Zero + n = n
-  Succ a + b = a + Succ b
-
-  Zero * n   = Zero
-  Succ a * b = b + (a * b)
-
-  abs n = n
-
-  signum _ = Succ Zero
-  negate = error "bad"
-
-
 
 
 trace :: forall a b c. Iso (Either a b) (Either a c) -> Iso b c
@@ -127,6 +112,43 @@ trace comb = Iso (\b -> loopfwd (to comb (Right b)))
     loopbwd :: Either a b -> b
     loopbwd (Left a) = loopbwd (from comb (Left a))
     loopbwd (Right c) = c
+
+
+not :: Iso' Bool
+not = swapCoprod
+
+just :: Iso b (Either () b)
+just = Iso Right (\(Right b) -> b)  -- intentionally partial
+
+add1 :: Iso' Nat
+add1 = trans just foldUnfold
+
+sub1 :: Iso' Nat
+sub1 = sym add1
+
+false :: Iso () Bool
+false = just
+
+true :: Iso () Bool
+true = trans just not
+
+right :: Iso a (Either a a)
+right = sym unit |> parProd false id |> distribFactor |> parCoprod unit unit
+
+zero :: Iso () Nat
+zero = trace $ swapCoprod |> foldUnfold |> right
+
+
+isEven :: Iso' (Nat, Bool)
+isEven = parProd (sym unit) id
+       |> trace (sym distribFactor
+              |> parProd (parCoprod swapProd id) id
+              -- TODO(sandy): where do the folds go??
+              |> distribFactor
+              |> parCoprod (parProd (parProd id id) not) id
+          )
+       |> parProd unit id
+
 
 main :: IO ()
 main = putStrLn "hello"
