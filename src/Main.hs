@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE NoImplicitPrelude    #-}
 {-# LANGUAGE PatternSynonyms      #-}
+{-# LANGUAGE RebindableSyntax     #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -22,6 +23,11 @@ data Iso a b = Iso
   }
 
 type Iso' a = Iso a a
+
+(>>) :: Iso a b -> Iso b c -> Iso a c
+(>>) = trans
+
+return = error "not applicable here, sucka"
 
 (|>) :: Iso a b -> Iso b c -> Iso a c
 (|>) = trans
@@ -133,21 +139,25 @@ true :: Iso () Bool
 true = trans just not
 
 right :: Iso a (Either a a)
-right = sym unit |> parProd false id |> distribFactor |> parCoprod unit unit
+right = do
+  sym unit
+  parProd false id
+  distribFactor
+  parCoprod unit unit
 
 zero :: Iso () Nat
-zero = trace $ swapCoprod |> foldUnfold |> right
-
+zero = trace $ do
+  swapCoprod
+  foldUnfold
+  right
 
 isEven :: Iso' (Nat, Bool)
-isEven = parProd (sym unit) id
-       |> trace (sym distribFactor
-              |> parProd (parCoprod swapProd id) id
-              -- TODO(sandy): where do the folds go??
-              |> distribFactor
-              |> parCoprod (parProd (parProd id id) not) id
-          )
-       |> parProd unit id
+isEven = trace $ do
+  parCoprod id (parProd (sym foldUnfold) id)
+  sym distribFactor
+  id  -- a0 should be a pair of nats
+  distribFactor
+  parCoprod (parProd id not) (parProd foldUnfold id)
 
 
 main :: IO ()
