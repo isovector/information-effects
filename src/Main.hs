@@ -8,6 +8,9 @@
 module Main where
 
 import Prelude (IO, putStrLn, Either (..), (.), Num (..), ($), error, show, Int, fst, snd)
+import qualified Prelude as P
+import qualified Prelude as Dbg (String, (++))
+import qualified Debug.Trace as Dbg
 
 type Bool = Either () ()
 
@@ -66,8 +69,8 @@ unit = Iso unite uniti
     unite ((), a) = a
     uniti a = ((), a)
 
-distribFactor :: Iso (Either a b, c) (Either (a, c) (b, c))
-distribFactor = Iso distrib factor
+distrib :: Iso (Either a b, c) (Either (a, c) (b, c))
+distrib = Iso distrib factor
   where
     distrib (Left a, c) = Left (a, c)
     distrib (Right b, c) = Right (b, c)
@@ -96,15 +99,18 @@ parCoprod ab cd = Iso to' from'
     from' (Left b)  = Left (from ab b)
     from' (Right d) = Right (from cd d)
 
-newtype Fix f = Fix { unfold :: f (Fix f) }
+newtype Fix f = Fix { unfold' :: f (Fix f) }
 
-fold :: f (Fix f) -> Fix f
-fold = Fix
-
-foldUnfold :: Iso (f (Fix f)) (Fix f)
-foldUnfold = Iso fold unfold
+fold :: Iso (f (Fix f)) (Fix f)
+fold = Iso Fix unfold'
 
 type Nat = Fix (Either ())
+
+instance P.Show Nat where
+  show f = show $ nat2Int f
+    where
+      nat2Int (Fix (Left ())) = 0
+      nat2Int (Fix (Right n)) = 1 + nat2Int n
 
 
 trace :: forall a b c. Iso (Either a b) (Either a c) -> Iso b c
@@ -127,7 +133,7 @@ just :: Iso b (Either () b)
 just = Iso Right (\(Right b) -> b)  -- intentionally partial
 
 add1 :: Iso' Nat
-add1 = trans just foldUnfold
+add1 = trans just fold
 
 sub1 :: Iso' Nat
 sub1 = sym add1
@@ -142,39 +148,66 @@ right :: Iso a (Either a a)
 right = do
   sym unit
   parProd false id
-  distribFactor
+  distrib
   parCoprod unit unit
 
 zero :: Iso () Nat
 zero = trace $ do
   swapCoprod
-  foldUnfold
+  fold
   right
-
-isEven :: Iso' (Nat, Bool)
-isEven = trace $ do
-  parCoprod id (parProd (sym foldUnfold) id)
-  sym distribFactor
-  parProd swapCoprod id
-  distribFactor
-  parCoprod (parProd id not) (parProd foldUnfold id)
 
 isZero :: Iso' (Nat, Bool)
 isZero = do
-  parProd (sym foldUnfold) id
-  distribFactor
+  parProd (sym fold) id
+  distrib
   parCoprod(parProd id not) id
-  sym distribFactor
-  parProd foldUnfold id
+  sym distrib
+  parProd fold id
 
+move1 :: Iso (Nat, Nat) (Either (Nat, Nat) Nat)
+move1 = do
+  parProd (sym fold) id
+  distrib
+  parCoprod unit (parProd id add1)
+  swapCoprod
+
+copoint :: Iso (Either a a) (a, Bool)
+copoint = do
+  parCoprod (sym unit) (sym unit)
+  sym distrib
+  swapProd
+
+
+debug :: Dbg.String -> Iso a a
+debug msg = Iso (Dbg.trace msg)
+                (Dbg.trace ("~" Dbg.++ msg))
 
 main :: IO ()
-main = putStrLn $ show $ bimap nat2Int (\x -> x) $ to (parProd (zero) false >> isZero) ((), ())
+main = putStrLn $ show $ to (parProd (zero >> add1 >> add1) true >> isEven) ((), ())
   where
     bimap :: (a -> b) -> (c -> d) -> (a, c) -> (b, d)
     bimap f g (a, c) = (f a ,g c)
 
-    nat2Int :: Nat -> Int
-    nat2Int (Fix (Left ())) = 0
-    nat2Int (Fix (Right n)) = 1 + nat2Int n
+
+sw :: Iso (a, (b, c)) (b, (a, c))
+sw = do
+  assocProd
+  parProd swapProd id
+  sym assocProd
+
+iterNat :: Iso' a  -> Iso' (Nat, a)
+iterNat step = do
+  sym unit
+  trace $ do
+    sym distrib
+    parProd (swapCoprod >> fold) id
+    sw
+    parProd (sym fold >> swapCoprod) id
+    distrib
+    parCoprod (parProd id (parProd id step) >> sw) id
+  unit
+
+isEven :: Iso' (Nat, Bool)
+isEven = iterNat not
 
