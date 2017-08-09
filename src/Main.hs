@@ -159,12 +159,22 @@ isEven = trace $ do
   distribFactor
   parCoprod (parProd id not) (parProd foldUnfold id)
 
-nat2Int :: Nat -> Int
-nat2Int (Fix (Left ())) = 0
-nat2Int (Fix (Right n)) = 1 + nat2Int n
+isZero :: Iso' (Nat, Bool)
+isZero = do
+  parProd (sym foldUnfold) id
+  distribFactor
+  parCoprod(parProd id not) id
+  sym distribFactor
+  parProd foldUnfold id
 
 
 main :: IO ()
-main = putStrLn $ show $ snd $ to (parProd (zero >> add1) true) ((), ())
+main = putStrLn $ show $ bimap nat2Int (\x -> x) $ to (parProd (zero) false >> isZero) ((), ())
+  where
+    bimap :: (a -> b) -> (c -> d) -> (a, c) -> (b, d)
+    bimap f g (a, c) = (f a ,g c)
 
+    nat2Int :: Nat -> Int
+    nat2Int (Fix (Left ())) = 0
+    nat2Int (Fix (Right n)) = 1 + nat2Int n
 
