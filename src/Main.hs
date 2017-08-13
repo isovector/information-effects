@@ -18,6 +18,12 @@ data U = U
 type Bool = U + U
 
 infix 3 <=>
+infix 6 +
+infix 7 *
+
+infix 6 .+
+infix 7 .*
+infix 1 >>
 
 data a <=> b
   = Iso
@@ -33,19 +39,19 @@ data a + b
 return :: a <=> a
 return = id
 
-swapProd :: a * b <=> b * a
-swapProd = Iso swap swap
+swapT :: a * b <=> b * a
+swapT = Iso swap swap
   where
     swap (Pair a b) = (Pair b a)
 
-swapCoprod :: a + b <=> b + a
-swapCoprod = Iso swap swap
+swapP :: a + b <=> b + a
+swapP = Iso swap swap
   where
     swap (InL a) = InR a
     swap (InR b) = InL b
 
-assocCoprod :: a + (b + c) <=> (a + b) + c
-assocCoprod = Iso assocl assocr
+assocP :: a + (b + c) <=> (a + b) + c
+assocP = Iso assocl assocr
   where
     assocl (InL a)       = InL (InL a)
     assocl (InR (InL b)) = InL (InR b)
@@ -55,14 +61,14 @@ assocCoprod = Iso assocl assocr
     assocr (InL (InR b)) = InR (InL b)
     assocr (InR c)       = InR (InR c)
 
-assocProd :: a * (b * c) <=> (a * b) * c
-assocProd = Iso assocl assocr
+assocT :: a * (b * c) <=> (a * b) * c
+assocT = Iso assocl assocr
   where
     assocl (Pair a (Pair b c)) = (Pair (Pair a b) c)
     assocr (Pair (Pair a b) c) = (Pair a (Pair b c))
 
-unit :: U * a <=> a
-unit = Iso unite uniti
+unite :: U * a <=> a
+unite = Iso unite uniti
   where
     unite (Pair U a) = a
     uniti a = (Pair U a)
@@ -85,12 +91,12 @@ sym iso = Iso (from iso) (to iso)
 id :: a <=> a
 id = Iso (\a -> a) (\a -> a)
 
-parProd :: (a <=> b) -> (c <=> d) -> (a * c <=> b * d)
-parProd ab cd = Iso (\(Pair a c) -> (Pair (to ab a) (to cd c)))
+(.*) :: (a <=> b) -> (c <=> d) -> (a * c <=> b * d)
+(.*) ab cd = Iso (\(Pair a c) -> (Pair (to ab a) (to cd c)))
                     (\(Pair b d) -> (Pair (from ab b) (from cd d)))
 
-parCoprod :: (a <=> b) -> (c <=> d) -> (a + c <=> b + d)
-parCoprod ab cd = Iso to' from'
+(.+) :: (a <=> b) -> (c <=> d) -> (a + c <=> b + d)
+(.+) ab cd = Iso to' from'
   where
     to' (InL a)   = InL (to ab a)
     to' (InR c)   = InR (to cd c)
@@ -125,7 +131,7 @@ trace comb = Iso (\b -> loopfwd (to comb (InR b)))
 
 
 not :: Bool <=> Bool
-not = swapCoprod
+not = swapP
 
 just :: b <=> U + b
 just = Iso InR (\(InR b) -> b)  -- intentionally partial
@@ -144,37 +150,37 @@ true = just >> not
 
 right :: a <=> a + a
 right = do
-  sym unit
-  parProd false id
+  sym unite
+  false .* id
   distrib
-  parCoprod unit unit
+  unite .+ unite
 
 zero :: U <=> Nat
 zero = trace $ do
-  swapCoprod
+  swapP
   fold
   right
 
 isZero :: Nat * Bool <=> Nat * Bool
 isZero = do
-  parProd (sym fold) id
+  sym fold .* id
   distrib
-  parCoprod(parProd id not) id
+  (id .* not) .+ id
   sym distrib
-  parProd fold id
+  fold .* id
 
 move1 :: Nat * Nat <=> (Nat * Nat) + Nat
 move1 = do
-  parProd (sym fold) id
+  sym fold .* id
   distrib
-  parCoprod unit (parProd id add1)
-  swapCoprod
+  unite .+ (id .* add1)
+  swapP
 
 copoint :: a + a <=> a * Bool
 copoint = do
-  parCoprod (sym unit) (sym unit)
+  sym unite .+ sym unite
   sym distrib
-  swapProd
+  swapT
 
 
 debug :: Dbg.String -> (a <=> a)
@@ -185,7 +191,7 @@ main :: IO ()
 main = putStrLn "hello"
 
 -- main :: IO ()
--- main = putStrLn $ show $ to (parProd (zero >> add1 >> add1) true >> isEven) (Pair U U)
+-- main = putStrLn $ show $ to ((.*) (zero >> add1 >> add1) true >> isEven) (Pair U U)
 --   where
 --     bimap :: (a -> b) -> (c -> d) -> (a * c) -> (b * d)
 --     bimap f g (Pair a c) = Pair (f a) (g c)
@@ -193,21 +199,21 @@ main = putStrLn "hello"
 
 sw :: a * (b * c) <=> b * (a * c)
 sw = do
-  assocProd
-  parProd swapProd id
-  sym assocProd
+  assocT
+  swapT .* id
+  sym assocT
 
 iterNat :: (a <=> a) -> (Nat * a <=> Nat * a)
 iterNat step = do
-  sym unit
+  sym unite
   trace $ do
     sym distrib
-    parProd (swapCoprod >> fold) id
+    (swapP >> fold) .* id
     sw
-    parProd (sym fold >> swapCoprod) id
+    (sym fold >> swapP) .* id
     distrib
-    parCoprod (parProd id (parProd id step) >> sw) id
-  unit
+    (id .* (id .* step) >> sw) .+ id
+  unite
 
 isEven :: Nat * Bool <=> Nat * Bool
 isEven = iterNat not
