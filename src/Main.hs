@@ -44,7 +44,7 @@ swapCoprod = Iso swap swap
     swap (InL a) = InR a
     swap (InR b) = InL b
 
-assocCoprod :: (a + (b + c)) <=> ((a + b) + c)
+assocCoprod :: a + (b + c) <=> (a + b) + c
 assocCoprod = Iso assocl assocr
   where
     assocl (InL a)       = InL (InL a)
@@ -55,13 +55,13 @@ assocCoprod = Iso assocl assocr
     assocr (InL (InR b)) = InR (InL b)
     assocr (InR c)       = InR (InR c)
 
-assocProd :: (a * (b * c)) <=> ((a * b) * c)
+assocProd :: a * (b * c) <=> (a * b) * c
 assocProd = Iso assocl assocr
   where
     assocl (Pair a (Pair b c)) = (Pair (Pair a b) c)
     assocr (Pair (Pair a b) c) = (Pair a (Pair b c))
 
-unit :: (U * a) <=> a
+unit :: U * a <=> a
 unit = Iso unite uniti
   where
     unite (Pair U a) = a
@@ -163,7 +163,7 @@ isZero = do
   sym distrib
   parProd fold id
 
-move1 :: (Nat * Nat) <=> ((Nat * Nat) + Nat)
+move1 :: Nat * Nat <=> (Nat * Nat) + Nat
 move1 = do
   parProd (sym fold) id
   distrib
