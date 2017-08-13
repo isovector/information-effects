@@ -296,29 +296,11 @@ nil = trace $ do
   distrib                   -- (U * List a) + (U * List a)
   (diverge .* id) .+ unite  -- (a * List a) + List a
 
-mapEndo :: (a <=> a) -> (List a <=> List a)
-mapEndo f = do
-  withUnit $ iterList $ (f .* id) .* id
-  reverse
-
-iterList :: ((a * List a) * (List a * b) <=> (a * List a) * (List a * b)) -> (List a * b <=> List a * b)
-iterList step = do
-  sym unite
-  trace $ do
-                                -- ((a * List a) * (List a * b)) + (U * (List a * b))
-    sym distrib                 -- ((a * List a) + U) * (List a * b)
-    (swapP >> sym liste) .* id  -- (List a * (List a * b))
-    sw                          -- (List a * (List a * b))
-    (liste >> swapP) .* id      -- ((a * List a) + U) * (List a * b)
-    distrib                     -- ((a * List a) * (List a * b)) + (U * (List a * b))
-    (step >> sw2) .+ id         -- ((a * List a) * (List a * b)) + (U * (List a * b))
-  unite
-
 reverse :: List a <=> List a
-reverse = withUnit $ iterList' id
+reverse = withUnit $ iterList id
 
-iterList' :: (a * z <=> b * z) -> (List a * z <=> List b * z)
-iterList' f = do
+iterList :: (a * z <=> b * z) -> (List a * z <=> List b * z)
+iterList f = do
   sym unite
   trace $ do
                                 -- ((b * List b) * (List a * z)) + (U * (List a * z))
@@ -340,14 +322,14 @@ iterList' f = do
 
 withUnit :: (a * U <=> b * U) -> (a <=> b)
 withUnit f = do
-  sym unite
-  swapT
-  f
-  sym swapT
-  unite
+  sym unite  -- U * a
+  swapT      -- a * U
+  f          -- b * U
+  sym swapT  -- U * b
+  unite      -- b
 
 map :: (a <=> b) -> (List a <=> List b)
 map f = do
-  withUnit $ iterList' $ f .* id
+  withUnit . iterList $ f .* id
   reverse
 
