@@ -321,17 +321,21 @@ iterList' :: (a * z <=> b * z) -> (List a * z <=> List b * z)
 iterList' f = do
   sym unite
   trace $ do
-                                  -- ((b * List b) * (List a * z)) + (U * (List a * z))
-    sym distrib                   -- ((b * List b) + U) * (List a * z)
-    (swapP >> sym liste) .* id    -- List b * (List a * z)
-    sw                            -- List a * (List b * z)
-    liste .* id                   -- (U + (a * List a)) * (List b * z)
-    distrib                       -- (U * (List b * z)) + ((a * List a) * (List b * z))
-    id .+ ((swapT .* id) >> sw2)  -- (U * (List b * z)) + ((List a * List b) * (a * z))
-    id .+ (id .* f)               -- (U * (List b * z)) + ((List a * List b) * (b * z))
-    id .+ sw2                     -- (U * (List b * z)) + ((List a * b) * (List b * z))
-    swapP                         -- ((List a * b) * (List b * z)) + (U * (List b * z))
-    (swapT .* id >> sw2) .+ id    -- ((b * List b) * (List a * z)) + (U * (List b * z))
+                                -- ((b * List b) * (List a * z)) + (U * (List a * z))
+    sym distrib                 -- ((b * List b) + U) * (List a * z)
+    (swapP >> sym liste) .* id  -- List b * (List a * z)
+    sw                          -- List a * (List b * z)
+    liste .* id                 -- (U + (a * List a)) * (List b * z)
+    distrib                     -- (U * (List b * z)) + ((a * List a) * (List b * z))
+    (.+) id $                   -- (U * (List b * z)) +
+      do
+        swapT .* id             --    ((List a * a) * (List b * z))
+        sw2                     --    ((List a * List b) * (a * z))
+        id .* f                 --    ((List a * List b) * (b * z))
+        sw2                     --    ((List a * b) * (List b * z))
+
+    swapP                       -- ((List a * b) * (List b * z)) + (U * (List b * z))
+    (swapT .* id >> sw2) .+ id  -- ((b * List b) * (List a * z)) + (U * (List b * z))
   unite
 
 withUnit :: (a * U <=> b * U) -> (a <=> b)
