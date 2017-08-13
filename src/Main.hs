@@ -23,7 +23,7 @@ infix 7 *
 
 infix 6 .+
 infix 7 .*
-infix 1 >>
+infixl 1 >>
 
 data a <=> b
   = Iso
@@ -35,6 +35,17 @@ data a * b = Pair a b
 data a + b
   = InL a
   | InR b
+
+instance {-# OVERLAPPING #-} P.Show Bool where
+  show (InL U) = "true"
+  show (InR U) = "false"
+
+instance (P.Show a, P.Show b) => P.Show (a * b) where
+  show (Pair a b) = "(" P.++ show a P.++ " * " P.++ show b P.++ ")"
+
+instance (P.Show a, P.Show b) => P.Show (a + b) where
+  show (InL a) = "(inl " P.++ show a P.++ ")"
+  show (InR a) = "(inr " P.++ show a P.++ ")"
 
 return :: a <=> a
 return = id
@@ -148,8 +159,8 @@ false = just
 true :: U <=> Bool
 true = just >> not
 
-right :: a <=> a + a
-right = do
+injectR :: a <=> a + a
+injectR = do
   sym unite
   false .* id
   distrib
@@ -159,7 +170,7 @@ zero :: U <=> Nat
 zero = trace $ do
   swapP
   fold
-  right
+  injectR
 
 isZero :: Nat * Bool <=> Nat * Bool
 isZero = do
@@ -187,14 +198,22 @@ debug :: Dbg.String -> (a <=> a)
 debug msg = Iso (Dbg.trace msg)
                 (Dbg.trace ("~" Dbg.++ msg))
 
-main :: IO ()
-main = putStrLn "hello"
+myList :: U <=> List Bool
+myList = do
+  nil
+  sym unite
+  true .* id
+  cons
+  sym unite
+  true .* id
+  cons
+  sym unite
+  false .* id
+  cons
+  map not
 
--- main :: IO ()
--- main = putStrLn $ show $ to ((.*) (zero >> add1 >> add1) true >> isEven) (Pair U U)
---   where
---     bimap :: (a -> b) -> (c -> d) -> (a * c) -> (b * d)
---     bimap f g (Pair a c) = Pair (f a) (g c)
+main :: IO ()
+main = putStrLn $ show $ to myList U
 
 
 sw :: a * (b * c) <=> b * (a * c)
@@ -217,4 +236,60 @@ iterNat step = do
 
 isEven :: Nat * Bool <=> Nat * Bool
 isEven = iterNat not
+
+
+data ListF a b
+  = Nil
+  | Cons a b
+
+type List a = Fix (ListF a)
+
+instance P.Show a => P.Show (List a) where
+  show (Fix Nil) = "[]"
+  show (Fix (Cons a b)) = show a P.++ ":" P.++ show b
+
+liste :: List a <=> U + (a * List a)
+liste = Iso to from
+  where
+    to (Fix Nil)          = InL U
+    to (Fix (Cons a b))   = InR (Pair a b)
+    from (InL U)          = Fix Nil
+    from (InR (Pair a b)) = Fix (Cons a b)
+
+cons :: a * List a <=> List a
+cons = do
+  just       -- U + (a * List a)
+  sym liste  -- List
+
+swapCbaP :: (a + b) + c <=> (c + b) + a
+swapCbaP = do
+  sym assocP   -- a + (b + c)
+  swapP        -- (b + c) + a
+  swapP .+ id  -- (c + b) + a
+
+diverge :: a <=> b
+diverge = trace $ do
+  id                 -- (a + b) + a
+  swapP .+ id        -- (b + a) + a
+  swapCbaP           -- (a + a) + b
+  sym injectR .+ id  -- a + b
+  swapP              -- b + a
+  injectR .+ id      -- (b + b) + a
+  swapCbaP           -- (a + b) + b
+
+nil :: U <=> List a
+nil = trace $ do
+  id                        -- (a * List a) + U
+  swapP                     -- U + (a * List a)
+  sym liste                 -- List a
+  sym unite                 -- U * List a
+  just .* id                -- (U + U) * List a
+  distrib                   -- (U * List a) + (U * List a)
+  (diverge .* id) .+ unite  -- (a * List a) + List a
+
+map :: (a <=> b) -> (List a <=> List b)
+map f = do
+  liste
+  id .+ (f .* map f)
+  sym liste
 
