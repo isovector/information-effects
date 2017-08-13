@@ -210,7 +210,7 @@ myList = do
   sym unite
   false .* id
   cons
-  mapEndo not
+  map not
 
 main :: IO ()
 main = putStrLn $ show $ to myList U
@@ -256,6 +256,7 @@ instance P.Show a => P.Show (List a) where
   show (Fix Nil) = "[]"
   show (Fix (Cons a b)) = show a P.++ ":" P.++ show b
 
+
 liste :: List a <=> U + (a * List a)
 liste = Iso to from
   where
@@ -277,7 +278,7 @@ swapCbaP = do
 
 diverge :: a <=> b
 diverge = trace $ do
-  id                 -- (a + b) + a
+                     -- (a + b) + a
   swapP .+ id        -- (b + a) + a
   swapCbaP           -- (a + a) + b
   sym injectR .+ id  -- a + b
@@ -287,7 +288,7 @@ diverge = trace $ do
 
 nil :: U <=> List a
 nil = trace $ do
-  id                        -- (a * List a) + U
+                            -- (a * List a) + U
   swapP                     -- U + (a * List a)
   sym liste                 -- List a
   sym unite                 -- U * List a
@@ -297,19 +298,14 @@ nil = trace $ do
 
 mapEndo :: (a <=> a) -> (List a <=> List a)
 mapEndo f = do
-  sym unite
-  swapT
-  iterList $ (f .* id) .* id
-  swapT
-  unite
+  withUnit $ iterList $ (f .* id) .* id
   reverse
 
 iterList :: ((a * List a) * (List a * b) <=> (a * List a) * (List a * b)) -> (List a * b <=> List a * b)
 iterList step = do
   sym unite
   trace $ do
-    id :: ((a * List a) * (List a * b)) + (U * (List a * b))
-      <=> ((a * List a) * (List a * b)) + (U * (List a * b))
+                                -- ((a * List a) * (List a * b)) + (U * (List a * b))
     sym distrib                 -- ((a * List a) + U) * (List a * b)
     (swapP >> sym liste) .* id  -- (List a * (List a * b))
     sw                          -- (List a * (List a * b))
@@ -319,10 +315,35 @@ iterList step = do
   unite
 
 reverse :: List a <=> List a
-reverse = do
+reverse = withUnit $ iterList' id
+
+iterList' :: forall a b z. (a * z <=> b * z) -> (List a * z <=> List b * z)
+iterList' f = do
+  sym unite
+  trace $ do
+                                  -- ((b * List b) * (List a * z)) + (U * (List a * z))
+    sym distrib                   -- ((b * List b) + U) * (List a * z)
+    (swapP >> sym liste) .* id    -- List b * (List a * z)
+    sw                            -- List a * (List b * z)
+    liste .* id                   -- (U + (a * List a)) * (List b * z)
+    distrib                       -- (U * (List b * z)) + ((a * List a) * (List b * z))
+    id .+ ((swapT .* id) >> sw2)  -- (U * (List b * z)) + ((List a * List b) * (a * z))
+    id .+ (id .* f)               -- (U * (List b * z)) + ((List a * List b) * (b * z))
+    id .+ sw2                     -- (U * (List b * z)) + ((List a * b) * (List b * z))
+    swapP                         -- ((List a * b) * (List b * z)) + (U * (List b * z))
+    (swapT .* id >> sw2) .+ id    -- ((b * List b) * (List a * z)) + (U * (List b * z))
+  unite
+
+withUnit :: (a * U <=> b * U) -> (a <=> b)
+withUnit f = do
   sym unite
   swapT
-  iterList id
-  swapT
+  f
+  sym swapT
   unite
+
+map :: (a <=> b) -> (List a <=> List b)
+map f = do
+  withUnit $ iterList' $ f .* id
+  reverse
 
