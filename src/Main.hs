@@ -30,9 +30,6 @@ data a + b
   = InL a
   | InR b
 
-type Iso    = (<=>)
-type Iso' a = Iso a a
-
 return :: a <=> a
 return = id
 
@@ -70,7 +67,7 @@ unit = Iso unite uniti
     unite (Pair U a) = a
     uniti a = (Pair U a)
 
-distrib :: (a + b * c) <=> (a * c) + (b * c)
+distrib :: (a + b) * c <=> (a * c) + (b * c)
 distrib = Iso distrib factor
   where
     distrib (Pair (InL a) c) = InL (Pair a c)
@@ -79,20 +76,20 @@ distrib = Iso distrib factor
     factor (InL (Pair a c)) = (Pair (InL a) c)
     factor (InR (Pair b c)) = (Pair (InR b) c)
 
-sym :: Iso a b -> Iso b a
+sym :: (a <=> b) -> (b <=> a)
 sym iso = Iso (from iso) (to iso)
 
-(>>) :: Iso a b -> Iso b c -> Iso a c
+(>>) :: (a <=> b) -> (b <=> c) -> (a <=> c)
 (>>) ab bc = Iso (to bc . to ab) (from ab . from bc)
 
-id :: Iso' a
+id :: a <=> a
 id = Iso (\a -> a) (\a -> a)
 
-parProd :: Iso a b -> Iso c d -> Iso (a * c) (b * d)
+parProd :: (a <=> b) -> (c <=> d) -> (a * c <=> b * d)
 parProd ab cd = Iso (\(Pair a c) -> (Pair (to ab a) (to cd c)))
                     (\(Pair b d) -> (Pair (from ab b) (from cd d)))
 
-parCoprod :: Iso a b -> Iso c d -> Iso (a + c) (b + d)
+parCoprod :: (a <=> b) -> (c <=> d) -> (a + c <=> b + d)
 parCoprod ab cd = Iso to' from'
   where
     to' (InL a)   = InL (to ab a)
@@ -114,7 +111,7 @@ instance P.Show Nat where
       nat2Int (Fix (InR n)) = 1 + nat2Int n
 
 
-trace :: forall a b c. Iso (a + b) (a + c) -> Iso b c
+trace :: forall a b c. (a + b <=> a + c) -> (b <=> c)
 trace comb = Iso (\b -> loopfwd (to comb (InR b)))
                  (\c -> loopbwd (from comb (InR c)))
   where
@@ -127,16 +124,16 @@ trace comb = Iso (\b -> loopfwd (to comb (InR b)))
     loopbwd (InR c) = c
 
 
-not :: Iso' Bool
+not :: Bool <=> Bool
 not = swapCoprod
 
-just :: Iso b (U + b)
+just :: b <=> U + b
 just = Iso InR (\(InR b) -> b)  -- intentionally partial
 
-add1 :: Iso' Nat
+add1 :: Nat <=> Nat
 add1 = just >> fold
 
-sub1 :: Iso' Nat
+sub1 :: Nat <=> Nat
 sub1 = sym add1
 
 false :: U <=> Bool
@@ -145,7 +142,7 @@ false = just
 true :: U <=> Bool
 true = just >> not
 
-right :: Iso a (a + a)
+right :: a <=> a + a
 right = do
   sym unit
   parProd false id
@@ -158,7 +155,7 @@ zero = trace $ do
   fold
   right
 
-isZero :: Iso' (Nat * Bool)
+isZero :: Nat * Bool <=> Nat * Bool
 isZero = do
   parProd (sym fold) id
   distrib
@@ -173,14 +170,14 @@ move1 = do
   parCoprod unit (parProd id add1)
   swapCoprod
 
-copoint :: a + a <=> (a * Bool)
+copoint :: a + a <=> a * Bool
 copoint = do
   parCoprod (sym unit) (sym unit)
   sym distrib
   swapProd
 
 
-debug :: Dbg.String -> Iso a a
+debug :: Dbg.String -> (a <=> a)
 debug msg = Iso (Dbg.trace msg)
                 (Dbg.trace ("~" Dbg.++ msg))
 
@@ -194,13 +191,13 @@ main = putStrLn "hello"
 --     bimap f g (Pair a c) = Pair (f a) (g c)
 
 
-sw :: (a * (b * c)) <=> (b * (a * c))
+sw :: a * (b * c) <=> b * (a * c)
 sw = do
   assocProd
   parProd swapProd id
   sym assocProd
 
-iterNat :: Iso' a  -> Iso' (Nat * a)
+iterNat :: (a <=> a) -> (Nat * a <=> Nat * a)
 iterNat step = do
   sym unit
   trace $ do
@@ -212,6 +209,6 @@ iterNat step = do
     parCoprod (parProd id (parProd id step) >> sw) id
   unit
 
-isEven :: Iso' (Nat * Bool)
+isEven :: Nat * Bool <=> Nat * Bool
 isEven = iterNat not
 
