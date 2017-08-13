@@ -8,8 +8,9 @@
 
 module Main where
 
+import Control.Category (Category (..))
 import qualified Debug.Trace as Dbg
-import           Prelude (IO, putStrLn, (.), Num (..), ($), error, show, Int, fst, snd)
+import           Prelude (IO, putStrLn, Num (..), ($), error, show, Int, fst, snd)
 import qualified Prelude as Dbg (String, (++))
 import qualified Prelude as P
 
@@ -18,6 +19,7 @@ data U = U
 type Bool = U + U
 
 infix 3 <=>
+infix 3 ~>
 infix 6 +
 infix 7 *
 
@@ -30,6 +32,13 @@ data a <=> b
   { to   :: a -> b
   , from :: b -> a
   }
+
+instance Category (<=>) where
+  id = Iso (\a -> a) (\a -> a)
+  (.) bc ab = Iso (to bc . to ab) (from ab . from bc)
+
+(>>) :: Category cat => cat a b -> cat b c -> cat a c
+(>>) = P.flip (.)
 
 data a * b = Pair a b
 data a + b
@@ -47,7 +56,7 @@ instance (P.Show a, P.Show b) => P.Show (a + b) where
   show (InL a) = "(inl " P.++ show a P.++ ")"
   show (InR a) = "(inr " P.++ show a P.++ ")"
 
-return :: a <=> a
+return :: Category c => c a a
 return = id
 
 swapT :: a * b <=> b * a
@@ -95,12 +104,6 @@ distrib = Iso distrib factor
 
 sym :: (a <=> b) -> (b <=> a)
 sym iso = Iso (from iso) (to iso)
-
-(>>) :: (a <=> b) -> (b <=> c) -> (a <=> c)
-(>>) ab bc = Iso (to bc . to ab) (from ab . from bc)
-
-id :: a <=> a
-id = Iso (\a -> a) (\a -> a)
 
 (.*) :: (a <=> b) -> (c <=> d) -> (a * c <=> b * d)
 (.*) ab cd = Iso (\(Pair a c) -> (Pair (to ab a) (to cd c)))
@@ -332,4 +335,70 @@ map :: (a <=> b) -> (List a <=> List b)
 map f = do
   withUnit . iterList $ f .* id
   reverse
+
+
+newtype a ~> b = Arr (a -> b)
+
+instance Category (~>) where
+  id = Arr P.id
+  Arr bc . Arr ab = Arr $ bc P.. ab
+
+arr :: (a <=> b) -> (a ~> b)
+arr = Arr . to
+
+erase :: a ~> U
+erase = Arr $ \_ -> U
+
+first :: (a ~> b) -> (a * c ~> b * c)
+first (Arr f) = Arr $ \(Pair a c) -> Pair (f a) c
+
+left :: (a ~> b) -> (a + c ~> b + c)
+left (Arr f) = Arr move
+  where
+    move (InL a) = InL $ f a
+    move (InR b) = InR b
+
+fstA :: a * b ~> a
+fstA = do
+  arr swapT
+  first erase
+  arr unite
+
+class Create v where
+  create :: U ~> v
+
+instance Create U where
+  create = id
+
+instance (Create a, Create b) => Create (a * b) where
+  create = do
+    arr $ sym unite
+    first create
+    arr $ swapT
+    first create
+
+instance Create a => Create (a + b) where
+  create = Arr $ \_ -> InL $ let Arr c = create
+                              in c U
+
+leftSwap :: (a + b) * a <=> (a + b) * a
+leftSwap = do
+  distrib
+  swapT .+ id
+  sym distrib
+
+leftA :: Create a => a ~> a + b
+leftA = do
+  arr $ sym unite
+  first create
+  arr leftSwap
+  fstA
+
+join :: a + a ~> a
+join = do
+  arr $ do
+    sym unite .+ sym unite
+    sym distrib
+    swapT
+  fstA
 
