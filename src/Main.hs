@@ -317,7 +317,7 @@ iterList step = do
 reverse :: List a <=> List a
 reverse = withUnit $ iterList' id
 
-iterList' :: forall a b z. (a * z <=> b * z) -> (List a * z <=> List b * z)
+iterList' :: (a * z <=> b * z) -> (List a * z <=> List b * z)
 iterList' f = do
   sym unite
   trace $ do
