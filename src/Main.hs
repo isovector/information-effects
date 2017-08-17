@@ -402,3 +402,34 @@ join = do
     swapT
   fstA
 
+class Clone a where
+  clone :: a ~> a * a
+
+instance Clone U where
+  clone = Arr $ \_ -> Pair U U
+
+instance (Clone a, Clone b) => Clone (a * b) where
+  clone = do
+    first clone
+    arr swapT
+    first clone
+    arr $ do
+      swapT
+      sw2
+
+instance (Create a, Create b, Clone a, Clone b) => Clone (a + b) where
+  clone = do
+    left $ do
+      clone
+      first leftA
+      arr swapT
+    arr swapP
+    left $ do
+      clone
+      first leftA
+      arr swapT
+    arr $ do
+      swapP
+      id .+ (id .* swapP)
+      sym distrib
+
