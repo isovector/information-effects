@@ -17,6 +17,9 @@ import qualified Prelude as P
 
 data U = U
 
+instance P.Show U where
+  show _ = "U"
+
 type Bool = U + U
 
 infix 3 <=>
@@ -339,13 +342,14 @@ map f = do
 
 
 data a ~> b where
-  Id     :: a ~> a
-  Arr    :: (a <=> b) -> (a ~> b)
-  (:.)   :: (a ~> b) -> (b ~> c) -> (a ~> c)
-  First  :: (a ~> b) -> (a * c ~> b * c)
-  Left   :: (a ~> b) -> (a + c ~> b + c)
-  Create :: U ~> a
-  Erase  :: a ~> U
+  Id      :: a ~> a
+  Arr     :: (a <=> b) -> (a ~> b)
+  (:.)    :: (a ~> b) -> (b ~> c) -> (a ~> c)
+  First   :: (a ~> b) -> (a * c ~> b * c)
+  Left    :: (a ~> b) -> (a + c ~> b + c)
+  CreateP :: (U ~> a) -> (U ~> a + b)
+  CreateT :: (U ~> a) -> (U ~> b) -> (U ~> a * b)
+  Erase   :: a ~> U
 
 instance Category (~>) where
   id = Id
@@ -369,16 +373,13 @@ fstA = do
   first erase
   arr unite
 
-create :: U ~> a
-create = Create
-
 leftSwap :: (a + b) * a <=> (a + b) * a
 leftSwap = do
   distrib
   swapT .+ id
   sym distrib
 
-leftA :: a ~> a + b
+leftA :: Create a => a ~> a + b
 leftA = do
   arr $ sym unite
   first create
@@ -394,16 +395,28 @@ join = do
   fstA
 
 eval :: (a ~> b) -> a -> b
-eval Id        = id
-eval (Arr f)   = to f
-eval (a :. b)  = eval b P.. eval a
-eval (First f) = \(Pair a b) -> Pair (eval f a) b
-eval (Left f)  = let f' (InL a) = InL $ eval f a
-                     f' (InR b) = InR b
-                  in f'
-eval Create    = P.undefined
-eval Erase     = \_ -> U
+eval Id            = id
+eval (Arr f)       = to f
+eval (a :. b)      = eval b P.. eval a
+eval (First f)     = \(Pair a b) -> Pair (eval f a) b
+eval (Left f)      = let f' (InL a) = InL $ eval f a
+                         f' (InR b) = InR b
+                      in f'
+eval (CreateT a b) = \_ -> Pair (eval a U) (eval b U)
+eval (CreateP a)   = InL . eval a
+eval Erase         = \_ -> U
 
+class Create a where
+  create :: U ~> a
+
+instance Create U where
+  create = id
+
+instance (Create a, Create b) => Create (a * b) where
+  create = CreateT create create
+
+instance (Create a) => Create (a + b) where
+  create = CreateP create
 
 
 class Clone a where
@@ -421,7 +434,7 @@ instance (Clone a, Clone b) => Clone (a * b) where
       swapT
       sw2
 
-instance (Clone a, Clone b) => Clone (a + b) where
+instance (Create a, Create b, Clone a, Clone b) => Clone (a + b) where
   clone = do
     left $ do
       clone
