@@ -342,7 +342,6 @@ map f = do
 
 
 data a ~> b where
-  Id      :: a ~> a
   Arr     :: (a <=> b) -> (a ~> b)
   (:.)    :: (a ~> b) -> (b ~> c) -> (a ~> c)
   First   :: (a ~> b) -> (a * c ~> b * c)
@@ -352,7 +351,7 @@ data a ~> b where
   Erase   :: a ~> U
 
 instance Category (~>) where
-  id = Id
+  id = Arr id
   (.) = P.flip (:.)
 
 arr :: (a <=> b) -> (a ~> b)
@@ -395,7 +394,6 @@ join = do
   fstA
 
 eval :: (a ~> b) -> a -> b
-eval Id            = id
 eval (Arr f)       = to f
 eval (a :. b)      = eval b P.. eval a
 eval (First f)     = \(Pair a b) -> Pair (eval f a) b
