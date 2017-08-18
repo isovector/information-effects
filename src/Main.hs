@@ -343,7 +343,7 @@ map f = do
 
 data a ~> b where
   Arr     :: (a <=> b) -> (a ~> b)
-  (:.)    :: (a ~> b) -> (b ~> c) -> (a ~> c)
+  Compose :: (a ~> b) -> (b ~> c) -> (a ~> c)
   First   :: (a ~> b) -> (a * c ~> b * c)
   Left    :: (a ~> b) -> (a + c ~> b + c)
   CreateP :: (U ~> a) -> (U ~> a + b)
@@ -352,7 +352,7 @@ data a ~> b where
 
 instance Category (~>) where
   id = Arr id
-  (.) = P.flip (:.)
+  (.) = P.flip Compose
 
 arr :: (a <=> b) -> (a ~> b)
 arr = Arr
@@ -395,7 +395,7 @@ join = do
 
 eval :: (a ~> b) -> a -> b
 eval (Arr f)       = to f
-eval (a :. b)      = eval b P.. eval a
+eval (Compose a b) = eval b P.. eval a
 eval (First f)     = \(Pair a b) -> Pair (eval f a) b
 eval (Left f)      = let f' (InL a) = InL $ eval f a
                          f' (InR b) = InR b
