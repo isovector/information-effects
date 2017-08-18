@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE GADTs                #-}
 {-# LANGUAGE NoImplicitPrelude    #-}
 {-# LANGUAGE PatternSynonyms      #-}
 {-# LANGUAGE RebindableSyntax     #-}
@@ -337,26 +338,30 @@ map f = do
   reverse
 
 
-newtype a ~> b = Arr (a -> b)
+data a ~> b where
+  Id     :: a ~> a
+  Arr    :: (a <=> b) -> (a ~> b)
+  (:.)   :: (a ~> b) -> (b ~> c) -> (a ~> c)
+  First  :: (a ~> b) -> (a * c ~> b * c)
+  Left   :: (a ~> b) -> (a + c ~> b + c)
+  Create :: U ~> a
+  Erase  :: a ~> U
 
 instance Category (~>) where
-  id = Arr P.id
-  Arr bc . Arr ab = Arr $ bc P.. ab
+  id = Id
+  (.) = P.flip (:.)
 
 arr :: (a <=> b) -> (a ~> b)
-arr = Arr . to
+arr = Arr
 
 erase :: a ~> U
-erase = Arr $ \_ -> U
+erase = Erase
 
 first :: (a ~> b) -> (a * c ~> b * c)
-first (Arr f) = Arr $ \(Pair a c) -> Pair (f a) c
+first = First
 
 left :: (a ~> b) -> (a + c ~> b + c)
-left (Arr f) = Arr move
-  where
-    move (InL a) = InL $ f a
-    move (InR b) = InR b
+left = Left
 
 fstA :: a * b ~> a
 fstA = do
@@ -364,22 +369,8 @@ fstA = do
   first erase
   arr unite
 
-class Create v where
-  create :: U ~> v
-
-instance Create U where
-  create = id
-
-instance (Create a, Create b) => Create (a * b) where
-  create = do
-    arr $ sym unite
-    first create
-    arr $ swapT
-    first create
-
-instance Create a => Create (a + b) where
-  create = Arr $ \_ -> InL $ let Arr c = create
-                              in c U
+create :: U ~> a
+create = Create
 
 leftSwap :: (a + b) * a <=> (a + b) * a
 leftSwap = do
@@ -387,7 +378,7 @@ leftSwap = do
   swapT .+ id
   sym distrib
 
-leftA :: Create a => a ~> a + b
+leftA :: a ~> a + b
 leftA = do
   arr $ sym unite
   first create
@@ -402,11 +393,24 @@ join = do
     swapT
   fstA
 
+eval :: (a ~> b) -> a -> b
+eval Id        = id
+eval (Arr f)   = to f
+eval (a :. b)  = eval b P.. eval a
+eval (First f) = \(Pair a b) -> Pair (eval f a) b
+eval (Left f)  = let f' (InL a) = InL $ eval f a
+                     f' (InR b) = InR b
+                  in f'
+eval Create    = P.undefined
+eval Erase     = \_ -> U
+
+
+
 class Clone a where
   clone :: a ~> a * a
 
 instance Clone U where
-  clone = Arr $ \_ -> Pair U U
+  clone = arr $ sym unite
 
 instance (Clone a, Clone b) => Clone (a * b) where
   clone = do
@@ -417,7 +421,7 @@ instance (Clone a, Clone b) => Clone (a * b) where
       swapT
       sw2
 
-instance (Create a, Create b, Clone a, Clone b) => Clone (a + b) where
+instance (Clone a, Clone b) => Clone (a + b) where
   clone = do
     left $ do
       clone
