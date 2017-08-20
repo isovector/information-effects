@@ -342,29 +342,33 @@ map f = do
 
 
 data a ~> b where
-  Arr     :: (a <=> b) -> (a ~> b)
-  Compose :: (a ~> b) -> (b ~> c) -> (a ~> c)
-  First   :: (a ~> b) -> (a * c ~> b * c)
-  Left    :: (a ~> b) -> (a + c ~> b + c)
-  CreateP :: (U ~> a) -> (U ~> a + b)
-  CreateT :: (U ~> a) -> (U ~> b) -> (U ~> a * b)
-  Erase   :: a ~> U
+  Arr     :: (a <=> b) -> (U * a ~> U * b)
+  Compose :: (h1 * a ~> g1 * b) -> (h2 * b ~> g2 * c) -> ((h1 * h2) * a ~> (g1 * g2) * c)
+  First   :: (h * a ~> g * b) -> (h * (a * c) ~> g * (b * c))
+  Left    :: (h * a ~> g * b) -> ((h * ((b + c) * (c + b))) * (a + c) ~> ((g * (b * (c + b))) + (h * ((b + c) * c))) * (b + c))
+  CreateP :: (a * U ~> U * a) -> ((a + b) * U ~> U * (a + b))
+  CreateT :: (a * U ~> U * a) -> (b * U ~> U * b) -> ((a * b) * U ~> U * (a * b))
+  Erase   :: U * a ~> a * U
+  Forget  :: (h * a ~> g * b) -> (a ~> b)
+
+
+
 
 instance Category (~>) where
-  id = Arr id
-  (.) = P.flip Compose
+  id = Forget $ Arr id
+  Forget a . Forget b = Forget $ Compose b a
 
 arr :: (a <=> b) -> (a ~> b)
-arr = Arr
+arr = Forget . Arr
 
 erase :: a ~> U
-erase = Erase
+erase = Forget Erase
 
 first :: (a ~> b) -> (a * c ~> b * c)
-first = First
+first (Forget x) = Forget $ First x
 
 left :: (a ~> b) -> (a + c ~> b + c)
-left = Left
+left (Forget x) = Forget $ Left x
 
 fstA :: a * b ~> a
 fstA = do
@@ -381,7 +385,7 @@ leftSwap = do
 leftA :: Create a => a ~> a + b
 leftA = do
   arr $ sym unite
-  first create
+  first createF
   arr leftSwap
   fstA
 
@@ -393,7 +397,7 @@ join = do
     swapT
   fstA
 
-eval :: (a ~> b) -> a -> b
+eval :: (h * a ~> g * b) -> a -> b
 eval (Arr f)       = to f
 eval (Compose a b) = eval b P.. eval a
 eval (First f)     = \(Pair a b) -> Pair (eval f a) b
@@ -404,8 +408,11 @@ eval (CreateT a b) = \_ -> Pair (eval a U) (eval b U)
 eval (CreateP a)   = InL . eval a
 eval Erase         = \_ -> U
 
+createF :: Create a => U ~> a
+createF = Forget create
+
 class Create a where
-  create :: U ~> a
+  create :: a * U ~> U * a
 
 instance Create U where
   create = id
